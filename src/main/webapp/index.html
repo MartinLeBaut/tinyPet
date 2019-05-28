@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>TinyPet</title>
+	<meta name="google-signin-client_id" content="61194772768-8ncgbvfqprbus23il4lcmaup7fpi4i5f.apps.googleusercontent.com">
+	<meta name="google-site-verification" content="sVcjzJF3oyb4GcsuSP_3d-g1jOYKMUdgg0oCWVNYF5c" />
+	<link href="components/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+</head>
+<body>
+
+
+	<script src="https://apis.google.com/js/platform.js?onload=init" async defer></script>
+	<script src="https://apis.google.com/js/client.js?onload=init"></script>
+	<script src="https://unpkg.com/mithril/mithril.js"></script>
+	<div id="menu"></div>
+	<div id="app" class="container"></div>
+	<script src="./view/top.js"></script>
+	<script src="./view/search.js"></script>
+	<script>	
+		window.userFullName = null;
+		window.log = false;
+		var url = "https://projetcloud-232813.appspot.com/_ah/api/petApi/v1/";
+
+	function signIn(googleUser) {
+	        // Useful data for your client-side scripts:
+	        var profile = googleUser.getBasicProfile();
+	        window.userFullName = profile.getName();
+	        // The ID token you need to pass to your backend:
+	        var id_token = googleUser.getAuthResponse().id_token;
+	        var login = document.getElementById("login");
+	        var logout = document.getElementById("logout");
+	        var imgusr = document.getElementById("imgusr");
+	        login.classList.add("d-none");
+	        logout.classList.remove("d-none");
+	        window.log = true;
+	        m.redraw(true);
+	        m.route.set("/top");
+	}
+    function signOut(e) {
+    	let auth2 = gapi.auth2.getAuthInstance();
+    	auth2.signOut().then(function () {
+    		var login = document.getElementById("login");
+    		var logout = document.getElementById("logout");
+    		logout.classList.add("d-none");
+    		login.classList.remove("d-none");
+    		window.userFullName = null;
+    		window.log = false;
+    		m.redraw(true);
+    		m.route.set("/top");
+    	});
+    }
+    
+    var btnSignedPet = {
+   		view: function() {
+   			return m("button", {"class":"btn btn-info", "disabled":"disabled"}, "Petition Signed")
+   		}
+    }
+    
+    var btnNotSignedPet = {
+        	view: function(vnode) {
+        		return m("form", vnode.attrs,
+        			m("button", {"class":"btn btn-success","type":"submit"}, "Sign"),
+        			)
+        	}
+    }
+    
+    var menu = {
+    	view: function() {
+    		return m("div", {"class":"main"}, 
+    			m("nav", {"class":"nav nav-tabs"},
+    				[
+    				m("a", {"class":"nav-link active","href":"#"}, 
+    					"TinyPet"
+    				),
+    				m("a", {"class":"nav-link", "href":"/add", oncreate: m.route.link},
+    						"New Petition"
+    				),
+    				m("a", {"class":"nav-link","href":"/top", oncreate: m.route.link}, 
+    							"TOP petition"
+    				),
+    				m(searchForm),
+    				m("li", {"id":"login"}, 
+    					m("div", {"class":"g-signin2 ","data-onsuccess":"signIn"})
+    				),
+    				m("li", {"class":"d-none","id":"logout","style":{"padding-left":"20px"}}, 
+    					m("button", {"class":"btn btn-primary","href":"#",onclick: signOut},
+    						"log out"	
+    					)
+    				)
+    				]
+    			)
+    		)
+    	}
+    }
+    var petition = {
+    	list: [],
+    	loadList: function() {
+    		return m.request({
+    			method: "GET",
+    			url: url + "entity"
+    		})
+    		.then(function(result) {
+    			petition.list = result.items
+	        	m.redraw(true) // force
+	        })
+    	},
+    	current: {},
+    	save: function() {
+    		return m.request({
+    			method: "POST",
+    			url: url + "addPetition/" + petition.current.petName + "/" + encodeURIComponent(window.userFullName)
+    		})
+    		.then(function(result) {
+    			//console.log("got:",result)
+    			petition.loadList()
+    		})
+    	}
+    }
+
+    var petitionView = {
+    	oninit: petition.loadList,
+    	view: function() {
+    		return m("table", {"class":"table table-striped"},
+    			[
+    			m("thead", 
+    				m("tr", {"class": "text-center"},
+    					[
+    					m("th", {"scope":"col"}, 
+    						"#"
+    						),
+    					m("th", {"scope":"col"}, 
+    						"Title"
+    						),
+    					m("th", {"scope":"col"}, 
+    						"Number of signatures"
+    						)
+    					]
+    					)
+    				),
+    			m("tbody", petition.list.map(function(item){
+    				return m("tr",
+    					[
+    					m("td",
+    						petition.list.indexOf(item) + 1
+    						),
+    					m("td", 
+    						item.properties.petName
+    						),
+    					m("td", 
+    						item.properties.nbSignature
+    						),
+    					]
+    					)
+    			})
+    			)
+    			]
+    			)
+    	},	
+    }    
+
+    var petitionGlobal = {
+    	view: function() {
+    		return m("main", [
+    			m("h1", {class: "title"}, "My petitions"),
+    			m("div", {id: "form"}, m(petitionAdd)),
+    			m("div", {id: "box"}, m(petitionView)),
+    			])
+    	}
+    }
+    var petitionAdd = {
+    	view: function() {
+    		return m("form", {
+    			onsubmit: function(e) {
+    				e.preventDefault();
+    				window.log ? petition.save() : alert("Veuillez vous connecter");
+    			}
+    		}, [
+    		m("label.label", "Petition title"),
+    		m("input",{
+    			oninput: function (e) {petition.current.petName=e.target.value},
+    			value: petition.current.petName,
+    			"class":"form-control",
+    			"type":"text",
+    			"placeholder":"Enter title"
+    		}),
+    		m("button", {"class":"btn btn-primary","type":"submit"}, "Add"),
+    		])
+    	}
+    }
+var app = document.getElementById("app");
+var nav = document.getElementById("menu");
+m.mount(nav, menu)
+m.route(app, "/top", {
+	"/add": petitionGlobal,
+	"/top": topPetitionGlobal,
+	"/search": searchPetitionGlobal,
+})
+</script>
+
+<footer>
+	<p>Jason Chauvière & Dominique Gaillon & Martin Le Baut</p>
+</footer>
+
+</body>
+</html>
